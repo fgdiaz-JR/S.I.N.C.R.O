@@ -1,6 +1,6 @@
 {
-  "name": "Serenitate - Cámaras PAP",
-  "description": "Plataforma informativa sobre cámaras aislantes de estímulos para Primeros Auxilios Psicológicos (PAP) en entornos de crisis.",
+  "name": "SINCRO - Regulación Emocional",
+  "description": "Sistema de integración neuro-comunitaria para la regulación emocional. Cabina de primeros auxilios psicológicos.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

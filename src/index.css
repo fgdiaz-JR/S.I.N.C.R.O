@@ -5,12 +5,12 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Cormorant Garamond", serif;
   
-  --color-paper: #F9F7F2;
-  --color-ink: #1A1A1A;
-  --color-slate-accent: #4A6D7C;
-  --color-neutral-accent: #8C867A;
-  --color-line: #E2DED0;
-  --color-paper-dark: #F2EDE4;
+  --color-paper: #F8FAFC;
+  --color-ink: #0F172A;
+  --color-accent: #0D9488;
+  --color-accent-soft: #CCFBF1;
+  --color-line: #E2E8F0;
+  --color-paper-dark: #F1F5F9;
 }
 
 @layer base {
