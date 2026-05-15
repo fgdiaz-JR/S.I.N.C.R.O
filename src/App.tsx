@@ -1,358 +1,453 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ChevronRight, 
-  ChevronLeft, 
   ShieldAlert, 
   Wind, 
   Lightbulb, 
   Cpu, 
-  TrendingUp,
-  Info,
+  Bell, 
+  Activity,
+  Zap,
   Lock,
-  Bell,
-  Thermometer,
-  Sparkles
+  Unlock,
+  CheckCircle2,
+  AlertTriangle,
+  Play,
+  RotateCcw,
+  Volume2,
+  Database
 } from 'lucide-react';
 
-// --- Types ---
-interface Stage {
-  id: string;
-  label: string;
-  title: string;
-  instruction: string;
-  interactive?: React.ReactNode;
-  content: React.ReactNode;
-}
+// --- Game Logic Constants ---
+const CRISIS_INCREMENT = 0.5;
+const STABILIZATION_RATE = 1.2;
 
 // --- Components ---
 
-const Balloon = ({ delay = 0 }: { delay?: number }) => {
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isPopped, setIsPopped] = useState(false);
-  
-  useEffect(() => {
-    setPosition({
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-    });
-  }, []);
-
-  if (isPopped) return null;
+const StressBalloon = ({ onPop }: { onPop: () => void, key?: React.Key }) => {
+  const [position] = useState({
+    x: Math.random() * 80 + 10,
+    delay: Math.random() * 5
+  });
 
   return (
     <motion.div
-      initial={{ y: '110vh', x: `${position.x}vw` }}
-      animate={{ 
-        y: '-10vh',
-        x: [`${position.x}vw`, `${position.x + (Math.random() * 6 - 3)}vw`, `${position.x}vw`]
-      }}
-      transition={{ 
-        y: { duration: 10 + Math.random() * 8, repeat: Infinity, ease: "linear", delay },
-        x: { duration: 4, repeat: Infinity, ease: "easeInOut" }
-      }}
-      className="absolute w-10 h-10 bg-accent/15 backdrop-blur-sm rounded-full cursor-crosshair border border-accent/20 z-0 flex items-center justify-center hover:scale-150 transition-transform"
-      onClick={() => setIsPopped(true)}
+      initial={{ y: '110vh', x: `${position.x}%` }}
+      animate={{ y: '-10vh' }}
+      transition={{ duration: 6 + Math.random() * 4, delay: position.delay, repeat: Infinity, ease: "linear" }}
+      className="absolute w-8 h-8 md:w-12 md:h-12 bg-red-400/20 backdrop-blur-sm rounded-full cursor-crosshair border border-red-500/30 z-20 flex items-center justify-center hover:bg-red-400/40 transition-colors"
+      onClick={onPop}
     >
-      <div className="w-1 h-1 bg-accent/40 rounded-full" />
+      <div className="w-1 h-1 bg-red-500 rounded-full animate-ping" />
     </motion.div>
   );
 };
 
+const DataBar = ({ value, color = "bg-accent" }: { value: number, color?: string }) => (
+  <div className="w-full h-1 bg-ink/10 rounded-full overflow-hidden">
+    <motion.div 
+      initial={{ width: 0 }}
+      animate={{ width: `${value}%` }}
+      className={`h-full ${color} transition-all duration-300`}
+    />
+  </div>
+);
+
+const TerminalLine = ({ text, delay = 0 }: { text: string, delay?: number }) => (
+  <motion.p 
+    initial={{ opacity: 0, x: -10 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay }}
+    className="text-[10px] uppercase font-mono tracking-widest text-neutral-accent mb-1"
+  >
+    {`> ${text}`}
+  </motion.p>
+);
+
 export default function App() {
-  const [currentStage, setCurrentStage] = useState(0);
-  const [cabinStatus, setCabinStatus] = useState({
-    locked: false,
+  // Game State
+  const [gameState, setGameState] = useState<'START' | 'PLAYING' | 'SUCCESS' | 'GAMEOVER'>('START');
+  const [currentLevel, setCurrentLevel] = useState(0);
+  const [crisisLevel, setCrisisLevel] = useState(50);
+  const [score, setScore] = useState(0);
+  
+  // Cabin Subsystems
+  const [systems, setSystems] = useState({
+    sealed: false,
     ventilation: false,
-    light: 'Normal',
-    alertSent: false
+    chromotherapy: 0, // 0 to 100 intensity
   });
 
-  const stages: Stage[] = [
+  // Data Logs Unlocked
+  const [unlockedLogs, setUnlockedLogs] = useState<string[]>([]);
+
+  // Sound Simulation (Visual cues)
+  const [alertPulse, setAlertPulse] = useState(false);
+
+  const popBalloon = useCallback(() => {
+    setCrisisLevel(prev => Math.max(0, prev - 5));
+    setScore(prev => prev + 50);
+  }, []);
+
+  // --- Game Loop ---
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (gameState === 'PLAYING') {
+      interval = setInterval(() => {
+        setCrisisLevel(prev => {
+          let modifier = CRISIS_INCREMENT;
+          
+          // Logic: System synergy reduces crisis
+          if (systems.sealed) modifier -= 0.8;
+          if (systems.ventilation) modifier -= 0.6;
+          if (systems.chromotherapy > 50) modifier -= 0.4;
+
+          const next = Math.max(0, Math.min(100, prev + modifier));
+          
+          if (next >= 100) setGameState('GAMEOVER');
+          if (next <= 0) handleLevelComplete();
+          
+          return next;
+        });
+      }, 100);
+    }
+    return () => clearInterval(interval);
+  }, [gameState, systems]);
+
+  const handleLevelComplete = () => {
+    setGameState('SUCCESS');
+    setScore(prev => prev + 1000);
+    // Move logic to "Mission Success" screen
+  };
+
+  const restartLevel = () => {
+    setCrisisLevel(50);
+    setSystems({ sealed: false, ventilation: false, chromotherapy: 0 });
+    setGameState('PLAYING');
+  };
+
+  const startMission = (level: number) => {
+    setCurrentLevel(level);
+    restartLevel();
+  };
+
+  // --- Content ---
+  const missions = [
     {
-      id: 'start',
-      label: 'Misión 01: Identificación',
-      title: 'El Vacío de Intervención',
-      instruction: 'Analiza el escenario actual antes de activar SINCRO.',
-      content: (
-        <div className="space-y-6 text-left">
-          <p className="text-lg text-ink font-serif italic">Imagina un entorno institucional saturado. Una crisis ocurre a la vista de todos.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="p-5 bg-accent-soft/50 border border-accent/20 rounded-2xl">
-                <h4 className="font-bold text-accent text-xs uppercase mb-2 font-sans tracking-widest">Problema</h4>
-                <p className="text-sm">Las rutas tradicionales fallan cuando el paciente no puede caminar al consultorio debido al bloqueo emocional.</p>
-             </div>
-             <div className="p-5 bg-white border border-line rounded-2xl">
-                <h4 className="font-bold text-ink text-xs uppercase mb-2 font-sans tracking-widest">Solución SINCRO</h4>
-                <p className="text-sm">Llevamos la intervención de primeros auxilios psicológicos al pasillo, eliminando la barrera de desplazamiento.</p>
-             </div>
-          </div>
-        </div>
-      ),
+      id: 'papy',
+      title: 'Protocolo de Emergencia',
+      description: 'Un estudiante está sufriendo un ataque de pánico en el pasillo principal.',
+      objective: 'Sella la cabina y activa el choque térmico para estabilizar.',
+      log: 'S.I.N.C.R.O es una infraestructura física automatizada de "primeros auxilios psicológicos" diseñada para superar picos de ansiedad en zonas de alto tráfico.'
     },
     {
-      id: 'step1',
-      label: 'Misión 02: Aislamiento',
-      title: 'Privacidad Instantánea',
-      instruction: 'Prueba la función de sellado hermético de la cabina.',
-      interactive: (
-        <button 
-          onClick={() => setCabinStatus(prev => ({ ...prev, locked: !prev.locked }))}
-          className={`flex items-center gap-3 px-8 py-4 rounded-xl font-bold font-sans tracking-widest label-xs transition-all ${cabinStatus.locked ? 'bg-accent text-paper' : 'bg-paper border border-ink text-ink shadow-lg active:scale-95'}`}
-        >
-          {cabinStatus.locked ? <Lock size={20} /> : <ShieldAlert size={20} />}
-          {cabinStatus.locked ? 'CABINA SELLADA' : 'SELLAR CABINA'}
-        </button>
-      ),
-      content: (
-        <div className="space-y-4 text-left">
-          <p className="text-lg font-serif">SINCRO elimina la **Exposición Pública** al sellarse.</p>
-          <div className={`p-6 border-l-4 transition-all duration-700 ${cabinStatus.locked ? 'border-accent bg-accent-soft/40' : 'border-line bg-paper-dark'}`}>
-            <p className="text-sm italic font-serif">"Al sellar la compuerta retráctil, el estigma desaparece, deteniendo la escalada de vergüenza y ansiedad."</p>
-          </div>
-        </div>
-      ),
+      id: 'grounding',
+      title: 'Aterrizaje Sensorial',
+      description: 'El ruido ambiental está impidiendo la respiración del usuario.',
+      objective: 'Optimiza la cromoterapia y mantén el sellado acústico.',
+      log: 'Grounding Fisiológico: Mediante ventilación forzada y cromoterapia, se reducen niveles de cortisol e induce una respiración pausada.'
     },
     {
-      id: 'step2',
-      label: 'Misión 03: Grounding',
-      title: 'Regulación Sensorial',
-      instruction: 'Inicia los protocolos de aterrizaje fisiológico.',
-      interactive: (
-        <div className="flex gap-4">
-          <button 
-            onClick={() => setCabinStatus(prev => ({ ...prev, ventilation: !prev.ventilation }))}
-            className={`p-4 px-6 rounded-xl border flex items-center gap-3 label-xs font-sans transition-all ${cabinStatus.ventilation ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-inner' : 'bg-white border-line text-ink'}`}
-          >
-            <Wind size={20} className={cabinStatus.ventilation ? 'animate-spin' : ''} /> {cabinStatus.ventilation ? 'ACTIVO' : 'CHOQUE TÉRMICO'}
-          </button>
-          <button 
-            onClick={() => setCabinStatus(prev => ({ ...prev, light: cabinStatus.light === 'Zen' ? 'Normal' : 'Zen' }))}
-            className={`p-4 px-6 rounded-xl border flex items-center gap-3 label-xs font-sans transition-all ${cabinStatus.light === 'Zen' ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-inner' : 'bg-white border-line text-ink'}`}
-          >
-            <Lightbulb size={20} /> CROMOTERAPIA {cabinStatus.light === 'Zen' ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      ),
-      content: (
-        <div className="space-y-4 text-left">
-          <p className="text-lg font-serif">El sistema nervioso necesita **Aterrizaje Fisiológico**.</p>
-          <p className="text-sm text-neutral-accent font-serif leading-loose italic">
-            Mediante ventilación forzada y luz LED regulada, desactivamos el estado de hiperalerta, induciendo una respiración pausada y bajando el cortisol.
-          </p>
-        </div>
-      ),
-    },
-    {
-      id: 'step3',
-      label: 'Misión 04: Soporte',
-      title: 'Alerta Pasiva',
-      instruction: 'Notifica al sistema de apoyo institucional.',
-      interactive: (
-        <button 
-          disabled={cabinStatus.alertSent}
-          onClick={() => setCabinStatus(prev => ({ ...prev, alertSent: true }))}
-          className={`flex items-center gap-4 px-10 py-5 rounded-2xl font-bold font-sans text-xs tracking-widest transition-all ${cabinStatus.alertSent ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 shadow-lg active:scale-95'}`}
-        >
-          {cabinStatus.alertSent ? <Sparkles size={20} /> : <Bell size={20} />}
-          {cabinStatus.alertSent ? 'SOPORTE EN CAMINO' : 'NOTIFICAR PSICOLOGÍA'}
-        </button>
-      ),
-      content: (
-        <div className="space-y-6 text-left">
-          <p className="text-lg font-serif italic text-ink">Trasladamos la responsabilidad de la ayuda.</p>
-          <p className="text-sm font-serif">Durante la crisis, el individuo pierde la capacidad de pedir ayuda. SINCRO avisa automáticamente al departamento de orientación sobre la ubicación y duración del evento.</p>
-        </div>
-      ),
-    },
-    {
-      id: 'scaling',
-      label: 'Nivel Final: Implementación',
-      title: 'Presupuesto y Escalamiento',
-      instruction: 'Analiza los costos de llevar SINCRO a tu institución.',
-      content: (
-        <div className="space-y-6">
-          <div className="overflow-hidden shadow-xl border border-line rounded-3xl bg-white">
-            <table className="w-full text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-paper-dark border-b border-line">
-                  <th className="p-5 label-xs font-sans font-black">Infraestructura</th>
-                  <th className="p-5 label-xs font-sans font-black text-right">Inversión (COP)</th>
-                </tr>
-              </thead>
-              <tbody className="font-serif">
-                <tr className="border-b border-line hover:bg-accent-soft/20 transition-colors">
-                  <td className="p-4 px-6">Unidad Acústica Modular (Aislamiento 30dB)</td>
-                  <td className="p-4 px-6 text-right font-bold">$8.5M - $12M</td>
-                </tr>
-                <tr className="border-b border-line hover:bg-accent-soft/20 transition-colors">
-                  <td className="p-4 px-6">Mecánica Industrial y Sellado Activo</td>
-                  <td className="p-4 px-6 text-right font-bold">$1.5M - $2.5M</td>
-                </tr>
-                <tr className="border-b border-line hover:bg-accent-soft/20 transition-colors">
-                  <td className="p-4 px-6">Sistemas de Control (PLC) y Software</td>
-                  <td className="p-4 px-6 text-right font-bold">$2.2M - $4M</td>
-                </tr>
-                <tr className="border-b border-line hover:bg-accent-soft/20 transition-colors">
-                  <td className="p-4 px-6">Climatización HVAC y Cromoterapia DMX</td>
-                  <td className="p-4 px-6 text-right font-bold">$0.8M - $1.5M</td>
-                </tr>
-              </tbody>
-              <tfoot className="bg-ink text-paper">
-                <tr>
-                  <td className="p-5 px-6 font-sans font-black tracking-[0.2em] text-[10px] uppercase">Costo por Cabina Operativa</td>
-                  <td className="p-5 px-6 text-right font-serif text-2xl italic font-light">$13.000.000 - $20.000.000</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      ),
+      id: 'alert',
+      title: 'Conexión Institucional',
+      description: 'La crisis requiere respuesta del departamento de psicología.',
+      objective: 'Activa el sistema de Alerta Pasiva mientras mantienes la calma.',
+      log: 'Alerta Pasiva: El sistema notifica automáticamente a orientación, trasladando la responsabilidad de buscar ayuda del paciente al sistema.'
     }
   ];
 
-  const handleNext = () => {
-    if (currentStage < stages.length - 1) setCurrentStage(currentStage + 1);
-  };
-
-  const handlePrev = () => {
-    if (currentStage > 0) setCurrentStage(currentStage - 1);
-  };
-
   return (
-    <div className="h-screen w-full bg-paper overflow-hidden font-sans text-ink flex flex-col relative select-none">
+    <div className="h-screen w-full bg-paper text-ink font-sans overflow-hidden flex flex-col relative select-none">
       
-      {/* Background Interactive Elements */}
-      {[...Array(15)].map((_, i) => (
-        <Balloon key={i} delay={i * 1.5} />
+      {/* Dynamic Background */}
+      <div className={`absolute inset-0 transition-colors duration-1000 pointer-events-none z-0 ${crisisLevel > 80 ? 'bg-red-50' : crisisLevel < 20 ? 'bg-accent/5' : 'bg-transparent'}`} />
+      
+      {/* Interactive Balloons for stress relief */}
+      {gameState === 'PLAYING' && crisisLevel > 30 && [...Array(5)].map((_, i) => (
+        <StressBalloon key={i} onPop={popBalloon} />
       ))}
 
-      {/* Aesthetic Overlays */}
-      <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-accent via-accent/50 to-accent z-40"></div>
-      <div className="absolute left-[30px] top-0 bottom-0 w-px bg-line opacity-20 z-10"></div>
-      <div className="absolute right-[30px] top-0 bottom-0 w-px bg-line opacity-20 z-10"></div>
-
-      {/* Header Navigation */}
-      <header className="h-24 flex items-center justify-between px-12 z-20 border-b border-line bg-paper/80 backdrop-blur-xl">
+      {/* Header / Telemetry Bar */}
+      <header className="h-20 border-b border-line bg-white/80 backdrop-blur-md px-8 flex items-center justify-between z-50">
         <div className="flex items-center gap-6">
-          <motion.h1 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="text-4xl font-serif tracking-tighter font-black text-ink"
-          >
-            SINCRO<span className="text-accent">.</span>
-          </motion.h1>
-          <div className="h-4 w-px bg-line"></div>
-          <span className="label-xs text-neutral-accent opacity-60 tracking-[0.3em]">Simulation Interface v1.0</span>
+          <div className="p-2 bg-ink text-paper rounded-lg">
+            <Cpu size={20} className={gameState === 'PLAYING' ? 'animate-pulse' : ''} />
+          </div>
+          <div>
+            <h1 className="text-xl font-serif font-black tracking-tighter">SINCRO INTERACTIVE</h1>
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-neutral-accent">Simulador de Regulación Neuro-Comunitaria</p>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-10">
-           <div className="flex gap-1.5 items-baseline">
-              {stages.map((_, idx) => (
-                <div 
-                  key={idx} 
-                  className={`h-1 rounded-full transition-all duration-700 ${idx === currentStage ? 'w-10 bg-accent' : idx < currentStage ? 'w-2 bg-ink/50' : 'w-2 bg-line'}`} 
-                />
-              ))}
-           </div>
+
+        <div className="flex items-center gap-12">
+          <div className="hidden md:block w-48">
+            <div className="flex justify-between mb-1">
+              <span className="text-[9px] font-bold uppercase tracking-widest">Nivel de Crisis</span>
+              <span className={`text-[9px] font-bold ${crisisLevel > 70 ? 'text-red-500' : 'text-accent'}`}>{Math.round(crisisLevel)}%</span>
+            </div>
+            <DataBar value={crisisLevel} color={crisisLevel > 70 ? 'bg-red-500' : 'bg-accent'} />
+          </div>
+          
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-neutral-accent">Puntaje Operativo</span>
+            <span className="text-xl font-serif italic">{score.toLocaleString()} PTS</span>
+          </div>
         </div>
       </header>
 
-      {/* Central Interactive Content Area */}
-      <main className="flex-1 flex items-center justify-center p-6 lg:p-20 relative z-20 overflow-hidden">
-        <div className="w-full max-w-5xl">
+      {/* Main Gameplay Screen */}
+      <main className="flex-1 flex flex-col lg:flex-row p-6 gap-6 z-10 overflow-hidden">
+        
+        {/* Sidebar: System Logs & Telemetry */}
+        <aside className="w-full lg:w-72 flex flex-col gap-6">
+          <div className="flex-1 bg-ink text-paper/90 p-5 rounded-3xl font-mono relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+              <Database size={60} />
+            </div>
+            <h3 className="text-[10px] font-bold mb-4 border-b border-paper/10 pb-2 text-accent">SYSTEM_LOGS_v4.2</h3>
+            <div className="space-y-1">
+              <TerminalLine text="BOOTING_SINCRO_CORE..." />
+              <TerminalLine text="CONNECTION_ESTABLISHED" delay={0.5} />
+              <TerminalLine text={`MISSION_TYPE: ${missions[currentLevel].id.toUpperCase()}`} delay={1} />
+              <TerminalLine text={`STATUS: ${gameState}`} delay={1.5} />
+              <TerminalLine text={`TEMP: ${systems.ventilation ? '21°C' : '28°C'}`} delay={2} />
+              <TerminalLine text={`DOOR: ${systems.sealed ? 'LOCKED' : 'OPEN'}`} delay={2.5} />
+              {crisisLevel > 60 && <TerminalLine text="WARNING: HIGH_CORTISOL_DETECTED" delay={0} />}
+            </div>
+          </div>
+
+          <div className="h-48 bg-white border border-line rounded-3xl p-5 flex flex-col justify-center gap-4">
+             <div className="flex items-center gap-3">
+               <div className={`p-2 rounded-lg ${systems.sealed ? 'bg-accent text-paper' : 'bg-paper-dark text-neutral-accent'}`}>
+                  <Lock size={16} />
+               </div>
+               <span className="text-[10px] font-bold uppercase tracking-widest">Sellado Acústico</span>
+             </div>
+             <div className="flex items-center gap-3">
+               <div className={`p-2 rounded-lg ${systems.ventilation ? 'bg-blue-500 text-paper' : 'bg-paper-dark text-neutral-accent'}`}>
+                  <Wind size={16} className={systems.ventilation ? 'animate-spin' : ''} />
+               </div>
+               <span className="text-[10px] font-bold uppercase tracking-widest">Flujo de Aire (HVAC)</span>
+             </div>
+             <Activity className="w-full h-8 text-line mt-2" />
+          </div>
+        </aside>
+
+        {/* Central Display */}
+        <div className="flex-1 relative bg-paper-dark/30 rounded-[3rem] border border-line flex items-center justify-center overflow-hidden">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={currentStage}
-              initial={{ opacity: 0, scale: 0.98, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 1.02, y: -15 }}
-              transition={{ duration: 0.5, ease: "anticipate" }}
-              className="bg-white/60 backdrop-blur-2xl border border-line p-10 lg:p-20 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[4rem] relative overflow-hidden"
-            >
-              {/* Internal Accents */}
-              <div className="absolute top-0 right-0 p-12">
-                 <span className="label-xs text-neutral-accent opacity-20 italic">Task: 0{currentStage + 1}</span>
-              </div>
-              <div className="absolute top-[40%] left-[-2px] h-20 w-1 bg-accent rounded-r-full"></div>
+            {gameState === 'START' && (
+              <motion.div 
+                key="start"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.1 }}
+                className="text-center p-12 max-w-lg"
+              >
+                <div className="w-20 h-20 bg-accent text-paper rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-accent/20">
+                  <Play size={40} fill="currentColor" />
+                </div>
+                <h2 className="text-4xl font-serif font-black mb-4 italic">Iniciar Simulación</h2>
+                <p className="text-neutral-accent text-sm mb-8 leading-relaxed">
+                  Toma el control de la cabina SINCRO. Tu misión es estabilizar a los usuarios en crisis mediante acciones precisas de aislamiento y regulación.
+                </p>
+                <button 
+                  onClick={() => startMission(0)}
+                  className="px-12 py-4 bg-ink text-paper rounded-2xl font-bold font-sans tracking-[0.2em] text-xs hover:bg-accent hover:shadow-xl transition-all active:scale-95"
+                >
+                  ACEPTAR MISIÓN
+                </button>
+              </motion.div>
+            )}
 
-              <div className="max-w-3xl">
-                 <h2 className="label-xs text-accent mb-8 font-black tracking-[0.5em] flex items-center gap-4">
-                   <div className="w-2 h-2 rounded-full bg-accent animate-ping"></div>
-                   {stages[currentStage].label}
-                 </h2>
-                 <h1 className="text-5xl lg:text-7xl font-serif text-ink tracking-tight mb-12 leading-none italic">
-                   {stages[currentStage].title}
-                 </h1>
-                 
-                 <div className="space-y-12">
-                    <div className="flex items-center gap-4 p-4 border border-line/50 bg-paper/50 rounded-2xl">
-                       <div className="p-3 bg-white rounded-xl shadow-sm text-accent"><Sparkles size={20} /></div>
-                       <p className="text-sm font-sans font-bold uppercase tracking-widest text-ink/70">
-                         Instrucción: <span className="text-neutral-accent font-normal italic lowercase">{stages[currentStage].instruction}</span>
-                       </p>
+            {gameState === 'PLAYING' && (
+              <motion.div 
+                key="playing"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="w-full h-full flex flex-col p-12"
+              >
+                <div className="flex-1 flex flex-col justify-center items-center">
+                  <div className={`relative w-64 h-80 transition-all duration-700 ${systems.sealed ? 'scale-100 rotate-0' : 'scale-95 -rotate-2 opacity-60'}`}>
+                    {/* The Cabin Visualizer */}
+                    <div className={`absolute inset-0 border-4 rounded-3xl shadow-2xl overflow-hidden flex flex-col ${systems.sealed ? 'border-accent' : 'border-ink/20 border-dashed'}`}>
+                       <div className={`flex-1 transition-colors duration-1000 flex items-center justify-center`} style={{ backgroundColor: `rgba(13, 148, 136, ${systems.chromotherapy / 200})` }}>
+                          <Activity size={40} className={crisisLevel > 50 ? 'animate-bounce text-ink/20' : 'text-accent/40'} />
+                       </div>
+                       {systems.ventilation && (
+                         <div className="absolute top-0 inset-x-0 h-4 bg-blue-500/20 blur-sm animate-pulse" />
+                       )}
                     </div>
+                  </div>
+                </div>
 
-                    {/* Simulation Engine Area */}
-                    {stages[currentStage].interactive && (
-                      <div className="py-12 flex justify-center bg-paper-dark/30 border-y border-line/40 rounded-[2rem] shadow-inner">
-                         {stages[currentStage].interactive}
-                      </div>
-                    )}
+                <div className="bg-white/80 backdrop-blur-sm p-8 rounded-3xl border border-line shadow-lg">
+                  <div className="flex items-center gap-4 mb-4">
+                    <AlertTriangle className="text-accent" size={20} />
+                    <h3 className="text-xs font-bold uppercase tracking-widest">{missions[currentLevel].title}</h3>
+                  </div>
+                  <p className="text-sm text-neutral-accent mb-6 leading-relaxed italic border-l-2 border-accent pl-4">
+                    {missions[currentLevel].objective}
+                  </p>
+                </div>
+              </motion.div>
+            )}
 
-                    <div className="min-h-[140px] transition-all">
-                       {stages[currentStage].content}
-                    </div>
-                 </div>
-              </div>
-            </motion.div>
+            {gameState === 'SUCCESS' && (
+               <motion.div 
+                key="success"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center p-12 max-w-2xl"
+              >
+                <CheckCircle2 size={80} className="text-accent mx-auto mb-8" />
+                <h2 className="text-4xl font-serif font-black mb-4">Misión Exitosa</h2>
+                <p className="text-neutral-accent text-sm mb-12">Crisis estabilizada. Has desbloqueado un registro de datos del proyecto.</p>
+                
+                <div className="bg-white p-8 rounded-[2rem] border border-line text-left mb-12 shadow-sm">
+                  <h4 className="text-[10px] font-bold text-accent uppercase mb-4 tracking-widest">Registro Desbloqueado:</h4>
+                  <p className="font-serif text-lg leading-relaxed italic">{missions[currentLevel].log}</p>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    if (currentLevel < missions.length - 1) {
+                      startMission(currentLevel + 1);
+                    } else {
+                      setGameState('START');
+                      setCurrentLevel(0);
+                    }
+                  }}
+                  className="px-12 py-4 bg-ink text-paper rounded-2xl font-bold font-sans tracking-[0.2em] text-xs hover:bg-accent transition-all"
+                >
+                  {currentLevel < missions.length - 1 ? 'SIGUIENTE NIVEL' : 'RESET SIMULACIÓN'}
+                </button>
+              </motion.div>
+            )}
+
+            {gameState === 'GAMEOVER' && (
+               <motion.div 
+                key="gameover"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center p-12"
+              >
+                <ShieldAlert size={80} className="text-red-500 mx-auto mb-8 animate-bounce" />
+                <h2 className="text-4xl font-serif font-black mb-4">CRISIS FUERA DE CONTROL</h2>
+                <p className="text-neutral-accent text-sm mb-12">El sistema no pudo contener el pico de ansiedad del usuario.</p>
+                <button 
+                  onClick={restartLevel}
+                  className="flex items-center gap-3 mx-auto px-10 py-4 bg-red-500 text-paper rounded-2xl font-bold font-sans tracking-[0.2em] text-xs"
+                >
+                  <RotateCcw size={16} /> REINTENTAR PROTOCOLO
+                </button>
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
+
+        {/* Right Sidebar: Controls */}
+        <aside className="w-full lg:w-80 flex flex-col gap-6">
+          <div className="bg-white border border-line rounded-[3rem] p-8 flex-1 shadow-sm flex flex-col gap-10">
+             <div className="flex flex-col gap-4">
+               <div className="flex justify-between items-center">
+                 <span className="label-xs font-black tracking-widest opacity-40">SELLADO</span>
+                 {systems.sealed ? <Lock className="text-accent" size={14} /> : <Unlock className="text-neutral-accent" size={14} />}
+               </div>
+               <button 
+                disabled={gameState !== 'PLAYING'}
+                onClick={() => setSystems(s => ({ ...s, sealed: !s.sealed }))}
+                className={`w-full h-16 rounded-2xl flex items-center justify-center font-black tracking-[0.2em] text-[10px] transition-all border ${systems.sealed ? 'bg-accent text-paper border-accent shadow-lg shadow-accent/20' : 'bg-paper text-ink border-line active:scale-95'}`}
+               >
+                 {systems.sealed ? 'CABINA CERRADA' : 'CERRAR PUERTA RECURRENTE'}
+               </button>
+             </div>
+
+             <div className="flex flex-col gap-4">
+               <div className="flex justify-between items-center">
+                 <span className="label-xs font-black tracking-widest opacity-40">VENTILACIÓN</span>
+                 <Wind size={14} className={systems.ventilation ? 'animate-spin text-blue-500' : 'text-neutral-accent'} />
+               </div>
+               <button 
+                disabled={gameState !== 'PLAYING'}
+                onClick={() => setSystems(s => ({ ...s, ventilation: !s.ventilation }))}
+                className={`w-full h-16 rounded-2xl flex items-center justify-center font-black tracking-[0.2em] text-[10px] transition-all border ${systems.ventilation ? 'bg-blue-500 text-paper border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-paper text-ink border-line active:scale-95'}`}
+               >
+                 {systems.ventilation ? 'SISTEMA HVAC ACTIVO' : 'ACTIVAR CHOQUE TÉRMICO'}
+               </button>
+             </div>
+
+             <div className="flex-1 flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <span className="label-xs font-black tracking-widest opacity-40">LUZ LED RGB</span>
+                  <span className="text-[10px] font-mono">{systems.chromotherapy}%</span>
+                </div>
+                <div className="flex-1 flex items-center justify-center p-4 bg-paper-dark rounded-[2rem] border border-line shadow-inner">
+                   <input 
+                    type="range" 
+                    disabled={gameState !== 'PLAYING'}
+                    min="0" 
+                    max="100" 
+                    value={systems.chromotherapy} 
+                    onChange={(e) => setSystems(s => ({ ...s, chromotherapy: parseInt(e.target.value) }))}
+                    className="w-full accent-accent h-2 bg-line rounded-lg appearance-none cursor-pointer"
+                   />
+                </div>
+                <p className="text-[9px] text-neutral-accent font-serif text-center italic">Ajusta para alcanzar el espectro de calma</p>
+             </div>
+          </div>
+
+          <div className="bg-ink p-8 rounded-[3rem] text-paper flex items-center justify-between">
+             <div className="flex flex-col">
+                <span className="text-[9px] font-black tracking-widest text-accent mb-1 uppercase">Alert Status</span>
+                <span className="font-serif italic text-lg leading-none">Normal</span>
+             </div>
+             <Bell className={crisisLevel > 70 ? 'text-red-500 animate-bounce' : 'text-paper opacity-20'} />
+          </div>
+        </aside>
       </main>
 
-      {/* Navigation & Controls */}
-      <footer className="h-32 flex items-center justify-between px-12 z-20 border-t border-line bg-paper/80 backdrop-blur-md">
-        <div className="flex gap-4">
-          <button 
-            onClick={handlePrev}
-            disabled={currentStage === 0}
-            className={`p-6 border border-line hover:bg-white hover:shadow-xl rounded-2xl transition-all flex items-center gap-4 label-xs font-black ${currentStage === 0 ? 'opacity-10 cursor-not-allowed' : 'text-ink cursor-pointer'}`}
-          >
-            <ChevronLeft size={16} /> Retroceder
-          </button>
-          
-          <button 
-            onClick={handleNext}
-            disabled={currentStage === stages.length - 1}
-            className={`p-6 px-14 bg-ink text-paper hover:bg-accent hover:shadow-xl rounded-2xl transition-all flex items-center gap-4 label-xs font-black ${currentStage === stages.length - 1 ? 'opacity-10 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-             {currentStage === stages.length - 2 ? 'Finalizar Tutorial' : 'Continuar'} <ChevronRight size={16} />
-          </button>
+      {/* Interactive Footer / Progress */}
+      <footer className="h-24 px-12 border-t border-line bg-white/80 backdrop-blur-md z-50 flex items-center justify-between">
+        <div className="flex items-center gap-8">
+           <div className="flex gap-1.5">
+              {missions.map((_, idx) => (
+                <div key={idx} className={`w-3 h-3 rounded-full transition-all duration-500 ${idx === currentLevel ? 'bg-accent' : idx < currentLevel ? 'bg-ink' : 'bg-line'}`} />
+              ))}
+           </div>
+           <div className="h-4 w-px bg-line"></div>
+           <p className="label-xs text-neutral-accent tracking-[0.2em]">MISIÓN {currentLevel + 1} DE {missions.length}</p>
         </div>
 
-        <div className="hidden lg:flex flex-col items-end">
-           <div className="flex gap-6 mb-3">
-              <div className="flex items-center gap-2 label-xs text-neutral-accent opacity-50"><Wind size={12} /> VENT</div>
-              <div className="flex items-center gap-2 label-xs text-neutral-accent opacity-50"><Lightbulb size={12} /> CROMO</div>
-              <div className="flex items-center gap-2 label-xs text-neutral-accent opacity-50"><Bell size={12} /> ALERT</div>
-           </div>
-           <p className="text-sm font-serif italic text-ink font-light opacity-80 decoration-accent/30 underline underline-offset-8">S.I.N.C.R.O - Ingeniería de la Calma</p>
+        <div className="hidden lg:flex items-center gap-4 text-ink/30 italic font-serif">
+           <Volume2 size={16} />
+           <p className="text-xs">Motorización DC Gestionada por L298N...</p>
+        </div>
+
+        <div className="flex items-center gap-4">
+           {gameState === 'PLAYING' && (
+             <button 
+              onClick={() => setGameState('START')}
+              className="p-4 border border-line rounded-xl label-xs font-black tracking-widest text-ink hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all"
+             >
+               ABORTAR
+             </button>
+           )}
         </div>
       </footer>
 
-      {/* Interaction Hint */}
-      <div className="absolute bottom-40 right-14 z-30 pointer-events-none hidden lg:block opacity-30">
-         <div className="flex items-center gap-5 label-xs text-neutral-accent vertical-text rotate-180 font-black tracking-[0.4em]">
-            EXPLOTAR ANSIEDAD <div className="w-16 h-px bg-accent"></div>
-         </div>
-      </div>
-
+      {/* Global CSS for some elements */}
       <style>{`
-        .vertical-text {
-          writing-mode: vertical-rl;
-        }
-        .cursor-crosshair {
-          cursor: crosshair;
+        input[type='range']::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 24px;
+          height: 24px;
+          background: #0D9488;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 4px solid white;
+          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
       `}</style>
     </div>
