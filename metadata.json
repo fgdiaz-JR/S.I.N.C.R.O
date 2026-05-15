@@ -1,0 +1,8 @@
+{
+  "name": "Serenitate - Cámaras PAP",
+  "description": "Plataforma informativa sobre cámaras aislantes de estímulos para Primeros Auxilios Psicológicos (PAP) en entornos de crisis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
