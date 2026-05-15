@@ -3,7 +3,7 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import FeatureGrid from './components/FeatureGrid';
 import CaseStudies from './components/CaseStudies';
-import { Send, MapPin, Phone, Mail } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function App() {
   return (
